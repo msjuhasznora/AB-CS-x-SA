@@ -1,12 +1,12 @@
 // az antibiotikum túl gyors, túl erős -- realisztikusabbá tenni, sztochasztikusan marad pár egy darabig?
-// efficacy-k
+// efficacy-k szétszedése. pl, egyelőre egy azonos immune efficacy van a decay-ben is és a source-ban is
 // késleltetett immunválasz megoldása (2-3 nap?) --> ne instant reagáljon
 // immunválasz lassú lecsengése
 
 // mit szeretnénk kihozni:
 // 1) ha 2-3 napon belül kap antibiotikumot, és mást nem, akkor nem károsodik a porc jelentősen
-// 2) ha az 5-6. napon jut csak antibiotikumhoz, és máshoz nem, akkor jelentősen károsodik a porc
-// 3) ha az 5.-6. napon jut csak antibiotikumhoz, viszont ekkor kortikoszteroidot is kap, akkor nem károsodik a porc
+// 2) ha az 5-6. napon jut csak antibiotikumhoz, és máshoz nem, akkor jelentősen károsodhat a porc
+// 3) ha az 5.-6. napon jut csak antibiotikumhoz, viszont ekkor kortikoszteroidot is kap, akkor nagyobb eséllyel marad meg a porcborítás
 
 package CorticosteroidsAntibiotics;
 
@@ -27,7 +27,7 @@ public class CorticosteroidsAntibiotics{
     public static void main(String[] args) {
 
         String singularOrSweep = "singular"; // "singular" or "sweep"
-        String inVivoOrInVitro = "inVivo";
+        String tabletsOrIntravenous = "tablets"; // drug taken orally or intravenously
 
         int y = 100, x = 100, visScale = 3;
         boolean isAntibiotics = true;
@@ -37,14 +37,17 @@ public class CorticosteroidsAntibiotics{
 
         if (singularOrSweep.equals("singular")){
 
-            NewExperiment experiment = new NewExperiment(x, y, visScale, new Rand(1), isAntibiotics, isCorticosteroids, 1*2*12*60, 0.2, inVivoOrInVitro, 110.0);
+            NewExperiment experiment = new NewExperiment(x, y, visScale, new Rand(1), isAntibiotics, isCorticosteroids, 2*2*12*60, 0.5, tabletsOrIntravenous, 110.0);
             experiment.numberOfTicks = experiment.numberOfTicksDelay + experiment.numberOfTicksDrug;
 
             experiment.Init();
             double remainingHealthyCells = experiment.RunExperiment(win);
 
             if (isAntibiotics) {
-                System.out.println(inVivoOrInVitro.equals("inVivo") ? "In vivo drug source [ng / ml]: " + experiment.antibiotics.drugSourceStomach : "In vitro drug concentration [nM]: " + experiment.antibiotics.NgPerMlToNanomolars(experiment.antibiotics.inVitroAntibioticsCon));
+                System.out.println(tabletsOrIntravenous.equals("tablets") ? "Tablets AB drug source [ng / ml]: " + experiment.antibiotics.drugSourceStomach : "Intravenous drug concentration [nM]: " + experiment.antibiotics.NgPerMlToNanomolars(experiment.antibiotics.intravenousAntibioticsCon));
+            }
+            if (isCorticosteroids) {
+                System.out.println(tabletsOrIntravenous.equals("tablets") ? "Tablets CS drug source [ng / ml]: " + experiment.corticosteroid.drugSourceStomach : "Intravenous drug concentration [nM]: " + experiment.corticosteroid.NgPerMlToNanomolars(experiment.corticosteroid.intravenousCorticosteroidCon));
             }
             System.out.println("Remaining healthy cells: " + remainingHealthyCells);
 
@@ -61,7 +64,7 @@ public class CorticosteroidsAntibiotics{
 
                 for (double damageRateSweep = 0.0; damageRateSweep < 100.0; damageRateSweep += 5.0) {
 
-                    NewExperiment experiment = new NewExperiment(x, y, visScale, new Rand(1), isAntibiotics, isCorticosteroids, BIG_VALUE, staphyloDiffCoeffSweep, inVivoOrInVitro, damageRateSweep);
+                    NewExperiment experiment = new NewExperiment(x, y, visScale, new Rand(1), isAntibiotics, isCorticosteroids, BIG_VALUE, staphyloDiffCoeffSweep, tabletsOrIntravenous, damageRateSweep);
                     experiment.numberOfTicks = experiment.numberOfTicksDelay + experiment.numberOfTicksDrug;
 
                     experiment.Init();
@@ -112,34 +115,34 @@ class CorticosteroidDrug{
     double EC50 = 62; // in nM = nanoMolars, [nM] = 10^-9 [mol/L]; https://www.fda.gov/media/155050/download
     double molarMassDrug = 499.535;
 
-    // in vitro properties
-    double inVitroAntibioticsCon = 5;
+    // intravenous properties
+    double intravenousCorticosteroidCon = 5;
 
-    // in vitro constructor
-    public CorticosteroidDrug(double inVitroAntibioticsCon, boolean isCorticosteroids){
+    // intravenous constructor
+    public CorticosteroidDrug(double intravenousCorticosteroidCon, boolean isCorticosteroids){
 
         if (isCorticosteroids == true){
-            this.inVitroAntibioticsCon = inVitroAntibioticsCon;
+            this.intravenousCorticosteroidCon = intravenousCorticosteroidCon;
         } else {
-            this.inVitroAntibioticsCon = 0.0;
+            this.intravenousCorticosteroidCon = 0.0;
         }
 
     }
 
-    // in vivo properties
+    // tablets case properties
 
-    double drugDecay = 0.013; // see the paxlovid_config.nb Mathematica notebook
-    double drugSourceStomach = 1800; // see the paxlovid_config.nb Mathematica notebook
-    double drugDecayStomach = 0.015; // see the paxlovid_config.nb Mathematica notebook
+    double drugDecay = 0.010;
+    double drugSourceStomach = 400;
+    double drugDecayStomach = 0.020;
 
-    // in vivo constructor
+    // tablets case constructor
     public CorticosteroidDrug(){
 
     }
 
-    double CorticosteroidEfficacy(double steroidNow){
+    public double CorticosteroidEfficacy(double steroidNow){
 
-        // double drugVirusProdEff = 7000 * Math.pow(drugNow, 2)/(1+7000*Math.pow(drugNow,2));
+        // 7000 * Math.pow(drugNow, 2)/(1+7000*Math.pow(drugNow,2));
         // drugNow is the drug concentration in nanograms / ml
         // drugNow needs to be converted to [nM]s, as IC50 is given in [nM]s
         double steroidNowInNanoMolars = NgPerMlToNanomolars(steroidNow);
@@ -173,36 +176,37 @@ class AntibioticsDrug {
     double EC50 = 62; // in nM = nanoMolars, [nM] = 10^-9 [mol/L]; https://www.fda.gov/media/155050/download
     double molarMassDrug = 499.535;
 
-    // in vitro properties
-    double inVitroAntibioticsCon = 5;
+    // intravenous properties
+    double intravenousAntibioticsCon = 5;
 
-    // in vitro constructor
-    public AntibioticsDrug(double inVitroAntibioticsCon, boolean isAntibiotics){
+    // intravenous constructor
+    public AntibioticsDrug(double intravenousAntibioticsCon, boolean isAntibiotics){
 
         if (isAntibiotics == true){
-            this.inVitroAntibioticsCon = inVitroAntibioticsCon;
+            this.intravenousAntibioticsCon = intravenousAntibioticsCon;
         } else {
-            this.inVitroAntibioticsCon = 0.0;
+            this.intravenousAntibioticsCon = 0.0;
         }
 
     }
 
-    // in vivo properties
+    // tablets decay properties
 
-    double drugDecay = 0.013; // see the paxlovid_config.nb Mathematica notebook
-    double drugSourceStomach = 1800; // see the paxlovid_config.nb Mathematica notebook
-    double drugDecayStomach = 0.015; // see the paxlovid_config.nb Mathematica notebook
+    double drugDecay = 0.005;
+    double drugSourceStomach = 100;
+    double drugDecayStomach = 0.010;
 
-    // in vivo constructor
+    // tablets case constructor
     public AntibioticsDrug(){
 
     }
 
     double AntibioticsEfficacy(double antibioticsNow){
 
-        // double drugVirusProdEff = 7000 * Math.pow(drugNow, 2)/(1+7000*Math.pow(drugNow,2));
+        // 7000 * Math.pow(drugNow, 2)/(1+7000*Math.pow(drugNow,2));
         // drugNow is the drug concentration in nanograms / ml
         // drugNow needs to be converted to [nM]s, as IC50 is given in [nM]s
+        // 1 / (1 + 1/(Math.pow(antibioticsCon / 100, 2)));
         double drugNowInNanoMolars = NgPerMlToNanomolars(antibioticsNow);
         double antibioticsEfficacy = 1 / ( 1 + (EC50 / StochasticDrug(drugNowInNanoMolars)));
 
@@ -248,17 +252,17 @@ class NewExperiment extends AgentGrid2D<Cells>{
 
     public double fixedDamageRate;
 
-    public double stapyloReproductionRate = Math.pow(10,-3);
-    public double damageRate = 1.01 * Math.pow(10,-7); // beta in the ODE
+    public double stapyloReproductionRate = Math.pow(10,-4);
+    public double damageRate = Math.pow(10,-6);
     public double deathProb = 7.02 * Math.pow(10,-4); // P_D
-    public double staphyloDiffCoeff = 0.2; // D_V [sigma^2 / min]
+    public double staphyloDiffCoeff; // D_V [sigma^2 / min]
 
     AntibioticsDrug antibiotics;
     CorticosteroidDrug corticosteroid;
 
-    String inVivoOrInVitro = "inVivo";
+    String tabletsOrIntravenous = "tablets";
 
-    public double immuneResponseDecay = 0.0005;
+    public double immuneResponseDecay = 0.00005;
     public double immuneResponseDiffCoeff = 0.1;
 
     public boolean isAntibiotics = true;
@@ -269,7 +273,7 @@ class NewExperiment extends AgentGrid2D<Cells>{
     public FileIO concentrationsFile;
     public String outputDir;
 
-    public NewExperiment(int xDim, int yDim, int visScale, Rand rn, boolean isAntibiotics, boolean isCorticosteroid, int numberOfTicksDelay, double staphyloDiffCoeff, String inVivoOrInVitro, double fixedDamageRate){
+    public NewExperiment(int xDim, int yDim, int visScale, Rand rn, boolean isAntibiotics, boolean isCorticosteroid, int numberOfTicksDelay, double staphyloDiffCoeff, String tabletsOrIntravenous, double fixedDamageRate){
 
         super(xDim, yDim, Cells.class);
         this.x = xDim;
@@ -279,17 +283,17 @@ class NewExperiment extends AgentGrid2D<Cells>{
         this.staphyloDiffCoeff = staphyloDiffCoeff;
         this.rn = rn;
 
-        this.inVivoOrInVitro = inVivoOrInVitro;
+        this.tabletsOrIntravenous = tabletsOrIntravenous;
         this.isAntibiotics = isAntibiotics;
         this.isCorticosteroid = isCorticosteroid;
 
         this.fixedDamageRate = fixedDamageRate;
 
-        if (inVivoOrInVitro.equals("inVivo")) {
+        if (tabletsOrIntravenous.equals("tablets")) {
 
             this.antibiotics = new AntibioticsDrug();
             this.corticosteroid = new CorticosteroidDrug();
-            this.numberOfTicksDrug = 10 * 24 * 60; // we administer antibiotics for 5 days, i.e. 5*24*60 minutes
+            this.numberOfTicksDrug = 2 * 24 * 60; // we administer antibiotics for 5 days, i.e. 5*24*60 minutes
 
         } else {
 
@@ -321,7 +325,7 @@ class NewExperiment extends AgentGrid2D<Cells>{
             Cells c = NewAgentSQ(i);
             c.CellInit(true,false, false);
             if (i == initialPlace){
-                bacterialCon.Add(c.Isq(), 10.0);
+                bacterialCon.Add(c.Isq(), 50.0);
                 bacterialCon.Update();
             }
         }
@@ -389,7 +393,10 @@ class NewExperiment extends AgentGrid2D<Cells>{
         // decay of the immuneResponseLevel
         for (Cells cell : this){
             double immuneResponseNow = immuneResponseLevel.Get(cell.Isq());
-            immuneResponseLevel.Add(cell.Isq(), -immuneResponseDecay * immuneResponseNow);
+            // todo: 0.01 -- efficacy of CS wrt decay
+            double immuneResponseDecayEff = immuneResponseDecay + 0.01 * corticosteroid.CorticosteroidEfficacy(corticosteroidCon);
+            // System.out.println(immuneResponseDecayEff);
+            immuneResponseLevel.Add(cell.Isq(), -immuneResponseDecayEff * immuneResponseNow);
         }
         immuneResponseLevel.Update();
 
@@ -420,8 +427,9 @@ class NewExperiment extends AgentGrid2D<Cells>{
         for (Cells cell : this){
             // double removalEfficacy = 2/(1+Math.exp(100*drugNow));
             // double removalEfficacy = 100*Math.pow(drugNow, 2)/(1+100*Math.pow(drugNow,2));
-            double drugBacterialRemovalEff = 1 / (1 + 1/(Math.pow(antibioticsCon / 100, 2)));
-            double immuneBacterialRemovalEff = 2 * 1 / (1 + 1/(Math.pow(immuneResponseLevel.Get(cell.Isq()),2)));
+            double drugBacterialRemovalEff = 0.01 * antibiotics.AntibioticsEfficacy(antibioticsCon);
+            System.out.println(drugBacterialRemovalEff);
+            double immuneBacterialRemovalEff = 0.5 * 1 / (1 + 1/(Math.pow(immuneResponseLevel.Get(cell.Isq()),2)));
             bacterialCon.Add(cell.Isq(), -drugBacterialRemovalEff * bacterialCon.Get(cell.Isq()));
             bacterialCon.Add(cell.Isq(), -immuneBacterialRemovalEff * bacterialCon.Get(cell.Isq()));
         }
@@ -431,12 +439,12 @@ class NewExperiment extends AgentGrid2D<Cells>{
 
     void TimeStepDrug(int tick){
 
-        if (this.inVivoOrInVitro.equals("inVitro")){
+        if (this.tabletsOrIntravenous.equals("intravenous")){
 
-            this.antibioticsCon = this.antibiotics.inVitroAntibioticsCon;
-            this.corticosteroidCon = this.corticosteroid.inVitroAntibioticsCon;
+            this.antibioticsCon = this.antibiotics.intravenousAntibioticsCon;
+            this.corticosteroidCon = this.corticosteroid.intravenousCorticosteroidCon;
 
-        } else if (this.inVivoOrInVitro.equals("inVivo")){
+        } else if (this.tabletsOrIntravenous.equals("tablets")){
 
             // decay of the drug
             this.antibioticsCon -= this.antibiotics.drugDecay * this.antibioticsCon;
@@ -457,7 +465,7 @@ class NewExperiment extends AgentGrid2D<Cells>{
             this.corticosteroidConStomach += CorticosteroidSourceStomach(tick);
 
         } else {
-            System.out.println("inVitro and inVivo are the only two choices currently.");
+            System.out.println("Intravenous and tablets are the only two choices currently.");
         }
 
     }
@@ -510,7 +518,7 @@ class NewExperiment extends AgentGrid2D<Cells>{
 
         // todo: improve
         double currentBacterialCon = bacterialCon.Get(cell.Isq());
-        return 1 / (1 + 1/(Math.pow(currentBacterialCon,2)));
+        return (1 - corticosteroid.CorticosteroidEfficacy(corticosteroidCon)) * 1 / (1 + 1/(Math.pow(currentBacterialCon,2)));
 
     }
 
@@ -563,13 +571,13 @@ class NewExperiment extends AgentGrid2D<Cells>{
         double drugInfo;
         if (this.isAntibiotics == false){
             drugInfo = 0.0;
-        } else if (this.inVivoOrInVitro.equals("inVitro")) {
-            drugInfo = this.antibiotics.NgPerMlToNanomolars(this.antibiotics.inVitroAntibioticsCon);
+        } else if (this.tabletsOrIntravenous.equals("intravenous")) {
+            drugInfo = this.antibiotics.NgPerMlToNanomolars(this.antibiotics.intravenousAntibioticsCon);
         } else {
             drugInfo = this.antibiotics.drugSourceStomach;
         }
 
-        String outputDir = projPath + "/" + date_time + this.inVivoOrInVitro + drugInfo + "__diff" + this.staphyloDiffCoeff;
+        String outputDir = projPath + "/" + date_time + this.tabletsOrIntravenous + drugInfo + "__diff" + this.staphyloDiffCoeff;
         if(this.fixedDamageRate < 100.0){
             outputDir +=  "__damagerate" + this.fixedDamageRate + "/";
         } else {
@@ -594,7 +602,7 @@ class NewExperiment extends AgentGrid2D<Cells>{
                 if (drawMe.CellType == 0){		// Healthy cells
                     vis.SetPix(i, RGB256(119, 198, 110));
                 }
-                else if (drawMe.CellType == 1){   // Infected cells
+                else if (drawMe.CellType == 1){   // Damaged cells
                     vis.SetPix(i, RGB256(124, 65, 120));
                 }
                 else if (drawMe.CellType == 2){
@@ -605,9 +613,9 @@ class NewExperiment extends AgentGrid2D<Cells>{
                 }
             }
 
-            vis.SetPix(ItoX(i) + xDim, ItoY(i), HeatMapGRB(10*bacterialCon.Get(i)));
+            vis.SetPix(ItoX(i) + xDim, ItoY(i), HeatMapGRB(100*bacterialCon.Get(i)));
 
-            vis.SetPix(ItoX(i) + 2 * xDim, ItoY(i), HeatMapRBG(10*immuneResponseLevel.Get(i)));
+            vis.SetPix(ItoX(i) + 2 * xDim, ItoY(i), HeatMapRBG(100*immuneResponseLevel.Get(i)));
         }
     }
 
@@ -638,9 +646,7 @@ class Cells extends AgentSQ2Dunstackable<NewExperiment>{
         // chondral damage: depends on the immune response strength (a strong immune response kills bacteria, but damages the cartilage as well)
 
         double immuneConAtCell = G.immuneResponseLevel.Get(Isq());
-
-        double damageProb = G.damageRate * G.xDim * G.yDim;
-        double effectiveDamageProb = damageProb * immuneConAtCell;
+        double effectiveDamageProb = immuneConAtCell * G.damageRate * G.xDim * G.yDim;
 
         if (this.CellType == 0){ // healthy cell
             if (G.rn.Double() < effectiveDamageProb) {
