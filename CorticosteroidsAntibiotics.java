@@ -48,7 +48,7 @@ public class CorticosteroidsAntibiotics{
 
         if (singularOrSweep.equals("singular")){
 
-            NewExperiment experiment = new NewExperiment(x, y, visScale, new Rand(1), isAntibiotics, isCorticosteroids, 1*6*60, 0.5, tabletsOrIntravenous, 110.0);
+            NewExperiment experiment = new NewExperiment(x, y, visScale, new Rand(1), isAntibiotics, isCorticosteroids, 1*6*60, 0.6, tabletsOrIntravenous, 110.0);
             experiment.numberOfTicks = experiment.numberOfTicksDelay + experiment.numberOfTicksDrug;
 
             experiment.Init();
@@ -335,8 +335,8 @@ class NewExperiment extends AgentGrid2D<CartilageCells>{
         for (int i = 0; i < length; i++){
             CartilageCells c = NewAgentSQ(i);
             c.CellInit(true,false, false);
-            if (i == initialPlace){
-                bacterialCon.Add(c.Isq(), 50.0);
+            if ((i == initialPlace) || (i == (initialPlace-1))){
+                bacterialCon.Add(c.Isq(), 20.0);
                 bacterialCon.Update();
             }
         }
@@ -419,15 +419,13 @@ class NewExperiment extends AgentGrid2D<CartilageCells>{
         double bacterialFactor = 1 / (1 + 1/(Math.pow(TotalBacterialCon(),2)));
         double arrivalFactor = bacterialFactor * corticosteroidSuppression;
 
-        for (int i = 0; i < arrivalFactor; i++) {
-            neutrophilLayer.NewAgentSQ(xDim / 2, yDim / 2).Init();
-        }
+        neutrophilLayer.BacteriaGeneratedNeutrophilArrival(arrivalFactor);
 
         // neutrophils "call" new ones by signaling, so this could be reasonable
         for(Neutrophil cell: neutrophilLayer){
             Rand rng = new Rand();
             if(rng.Double() < neutrophilLayer.signalingIntensity) {
-                cell.NeutrophilArrivalToSite(neutrophilLayer.signalSuccess * arrivalFactor);
+                cell.NeutrophilsCallNeutrophils(neutrophilLayer.signalSuccess * arrivalFactor);
             }
         }
 
@@ -678,18 +676,18 @@ class Neutrophil extends AgentPT2D<NeutrophilLayer> {
     public void NeutrophilDecay(double decayProb){
         if(G.rng.Double()<decayProb){
             Dispose();
-            return;
         }
     }
 
-    public void NeutrophilArrivalToSite(double signalSuccess){
+    public void NeutrophilsCallNeutrophils(double signalSuccess){
         if((G.PopAt(Isq())<5) && G.rng.Double()<signalSuccess){
-            G.NewAgentPT(Xpt(), Ypt()).Init();
+            double[] location = G.NeutrophilInfiltrationLocation();
+            G.NewAgentPT(location[0], location[1]).Init();
         }
     }
 
     public void NeutrophilMove(){
-        G.rng.RandomPointInCircle(0.5,G.moveCoords);
+        G.rng.RandomPointInCircle(1.5,G.moveCoords);
         MoveSafePT(Xpt()+G.moveCoords[0], Ypt()+G.moveCoords[1]);
     }
 
@@ -701,7 +699,7 @@ class NeutrophilLayer extends AgentGrid2D<Neutrophil> {
     double signalSuccess = 0.7;
 
     Rand rng = new Rand();
-    double[]moveCoords=new double[2];
+    double[] moveCoords = new double[2];
 
     public NeutrophilLayer(int x, int y) {super(x, y, Neutrophil.class);}
 
@@ -713,25 +711,36 @@ class NeutrophilLayer extends AgentGrid2D<Neutrophil> {
         win.Update();
     }
 
-    //public void runNeutrophils(){
+    public void BacteriaGeneratedNeutrophilArrival(double arrivalFactor){
 
-        //OpenGL2DWindow win = new OpenGL2DWindow("Neutrophils", 500, 500, x,y);
+        for (int i = 0; i < arrivalFactor; i++) {
+            double[] location = this.NeutrophilInfiltrationLocation();
+            this.NewAgentPT(location[0], location[1]).Init();
+        }
 
-        // init model
+    }
 
-        //for (int i = 0; i<timesteps; i++){
-            //if (win.IsClosed()){
-            //    break;
-            //}
-            //win.TickPause(20);
-            //if(model.Pop()==0){
-            //    model.NewAgentSQ(model.xDim/2, model.yDim/2).Init();
-            //}
+    public double[] NeutrophilInfiltrationLocation(){
 
-            //draw
-            //model.DrawModel(win);
-        //}
-        //win.Close();
+        double[] neutrophilRandLocation = new double[2];
+        Rand random = new Rand();
+        int edge = random.Int(4);
 
-    //}
+        if (edge == 0){
+            neutrophilRandLocation[0] = random.Double(99);
+            neutrophilRandLocation[1] = 99.0;
+        } else if (edge == 1) {
+            neutrophilRandLocation[0] = random.Double(99);
+            neutrophilRandLocation[1] = 0;
+        } else if (edge == 2) {
+            neutrophilRandLocation[0] = 99;
+            neutrophilRandLocation[1] = random.Double(99);
+        } else {
+            neutrophilRandLocation[0] = 0;
+            neutrophilRandLocation[1] = random.Double(99);
+        }
+
+        return neutrophilRandLocation;
+    }
+
 }
