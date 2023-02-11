@@ -32,12 +32,7 @@ import java.io.File;
 
 public class CorticosteroidsAntibiotics{
 
-    public static final int BIG_VALUE = (Integer.MAX_VALUE-1) / 2;
-
     public static void main(String[] args) {
-
-        String singularOrSweep = "singular"; // "singular" or "sweep"
-        String tabletsOrIntravenous = "tablets"; // drug taken orally or intravenously
 
         int y = 100, x = 100, visScale = 3;
         boolean isAntibiotics = true;
@@ -46,75 +41,15 @@ public class CorticosteroidsAntibiotics{
         GridWindow win = new GridWindow("Cellular state space, bacterial concentration, immune reaction.", x*3, y, visScale,true);
         OpenGL2DWindow neutrophilWindow = new OpenGL2DWindow("Neutrophils", 500, 500, x,y);
 
-        if (singularOrSweep.equals("singular")){
+        NewExperiment experiment = new NewExperiment(x, y, visScale, new Rand(1), isAntibiotics, isCorticosteroids, 1*6*60, 0.6);
+        experiment.numberOfTicks = experiment.numberOfTicksDelay + experiment.numberOfTicksDrug;
 
-            NewExperiment experiment = new NewExperiment(x, y, visScale, new Rand(1), isAntibiotics, isCorticosteroids, 1*6*60, 0.6, tabletsOrIntravenous, 110.0);
-            experiment.numberOfTicks = experiment.numberOfTicksDelay + experiment.numberOfTicksDrug;
+        experiment.Init();
+        double remainingHealthyCells = experiment.RunExperiment(win, neutrophilWindow);
 
-            experiment.Init();
-            double remainingHealthyCells = experiment.RunExperiment(win, neutrophilWindow);
-
-            if (isAntibiotics) {
-                System.out.println(tabletsOrIntravenous.equals("tablets") ? "Tablets AB drug source [ng / ml]: " + experiment.antibiotics.drugSourceStomach : "Intravenous drug concentration [nM]: " + experiment.antibiotics.NgPerMlToNanomolars(experiment.antibiotics.intravenousAntibioticsCon));
-            }
-            if (isCorticosteroids) {
-                System.out.println(tabletsOrIntravenous.equals("tablets") ? "Tablets CS drug source [ng / ml]: " + experiment.corticosteroid.drugSourceStomach : "Intravenous drug concentration [nM]: " + experiment.corticosteroid.NgPerMlToNanomolars(experiment.corticosteroid.intravenousCorticosteroidCon));
-            }
-            System.out.println("Remaining healthy cells: " + remainingHealthyCells);
-
-        } else if (singularOrSweep.equals("sweep")) {
-
-            String collectiveOutputDir = collectiveOutputDir(isAntibiotics, isCorticosteroids);
-            FileIO collectiveOutFile = new FileIO(collectiveOutputDir.concat("/").concat("collectiveRemainingHealthyCells").concat(".csv"), "w");
-            String collectiveResults;
-
-            for (double staphyloDiffCoeffSweep = 0.00625; staphyloDiffCoeffSweep < 50; staphyloDiffCoeffSweep *= 2) {
-
-                collectiveResults = "";
-                collectiveResults += staphyloDiffCoeffSweep + ", ";
-
-                for (double damageRateSweep = 0.0; damageRateSweep < 100.0; damageRateSweep += 5.0) {
-
-                    NewExperiment experiment = new NewExperiment(x, y, visScale, new Rand(1), isAntibiotics, isCorticosteroids, BIG_VALUE, staphyloDiffCoeffSweep, tabletsOrIntravenous, damageRateSweep);
-                    experiment.numberOfTicks = experiment.numberOfTicksDelay + experiment.numberOfTicksDrug;
-
-                    experiment.Init();
-                    double remainingHealthyCells = experiment.RunExperiment(win, neutrophilWindow);
-
-                    collectiveResults += remainingHealthyCells + ", ";
-
-                }
-                collectiveOutFile.Write(collectiveResults + "\n");
-                System.out.println(collectiveResults);
-            }
-
-            collectiveOutFile.Close();
-
-        } else {
-            System.out.println("The only options are singular and sweep.");
-        }
+        System.out.println("Remaining healthy cells: " + remainingHealthyCells);
 
         win.Close();
-
-    }
-
-    public static String collectiveOutputDir(boolean isAntibiotics, boolean isCorticosteroid){
-
-        java.util.Date now = new java.util.Date();
-        java.text.SimpleDateFormat dateFormat = new java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss");
-        String date_time = dateFormat.format(now);
-        String projPath = PWD() + "/output/StaphyloExperiments";
-        if (isAntibiotics == false){
-            projPath += "/noDrug";
-        } else if (isCorticosteroid == true){
-            projPath += "/steroidBoostedAB";
-        } else {
-            projPath += "/AntibioticsOnly";
-        }
-        String collectiveOutputDir = projPath + "/" + date_time + "__collective";
-        new File(collectiveOutputDir).mkdirs();
-
-        return collectiveOutputDir;
 
     }
 
@@ -123,42 +58,19 @@ public class CorticosteroidsAntibiotics{
 class CorticosteroidDrug{
 
     // general properties
-    double EC50 = 62; // in nM = nanoMolars, [nM] = 10^-9 [mol/L]; https://www.fda.gov/media/155050/download
-    double molarMassDrug = 499.535;
-
-    // intravenous properties
-    double intravenousCorticosteroidCon = 5;
-
-    // intravenous constructor
-    public CorticosteroidDrug(double intravenousCorticosteroidCon, boolean isCorticosteroids){
-
-        if (isCorticosteroids == true){
-            this.intravenousCorticosteroidCon = intravenousCorticosteroidCon;
-        } else {
-            this.intravenousCorticosteroidCon = 0.0;
-        }
-
-    }
-
-    // tablets case properties
+    double EC50 = 62; // the drug quantity which results in 50% efficacy
 
     double drugDecay = 0.010;
     double drugSourceStomach = 400;
     double drugDecayStomach = 0.020;
 
-    // tablets case constructor
     public CorticosteroidDrug(){
 
     }
 
     public double CorticosteroidEfficacy(double steroidNow){
 
-        // 7000 * Math.pow(drugNow, 2)/(1+7000*Math.pow(drugNow,2));
-        // drugNow is the drug concentration in nanograms / ml
-        // drugNow needs to be converted to [nM]s, as IC50 is given in [nM]s
-        double steroidNowInNanoMolars = NgPerMlToNanomolars(steroidNow);
-        double steroidEfficacy = 1 / ( 1 + (EC50 / StochasticDrug(steroidNowInNanoMolars)));
-
+        double steroidEfficacy = 1 / ( 1 + (EC50 / StochasticDrug(steroidNow)));
         return steroidEfficacy;
 
     }
@@ -175,52 +87,23 @@ class CorticosteroidDrug{
 
     }
 
-    double NgPerMlToNanomolars(double drugNow){
-        return drugNow * Math.pow(10,3) / molarMassDrug;
-    }
-
 }
 
 class AntibioticsDrug {
 
-    // general properties
     double EC50 = 62; // in nM = nanoMolars, [nM] = 10^-9 [mol/L]; https://www.fda.gov/media/155050/download
-    double molarMassDrug = 499.535;
-
-    // intravenous properties
-    double intravenousAntibioticsCon = 5;
-
-    // intravenous constructor
-    public AntibioticsDrug(double intravenousAntibioticsCon, boolean isAntibiotics){
-
-        if (isAntibiotics == true){
-            this.intravenousAntibioticsCon = intravenousAntibioticsCon;
-        } else {
-            this.intravenousAntibioticsCon = 0.0;
-        }
-
-    }
-
-    // tablets decay properties
 
     double drugDecay = 0.005;
     double drugSourceStomach = 100;
     double drugDecayStomach = 0.010;
-
-    // tablets case constructor
     public AntibioticsDrug(){
 
     }
 
     double AntibioticsEfficacy(double antibioticsNow){
 
-        // 7000 * Math.pow(drugNow, 2)/(1+7000*Math.pow(drugNow,2));
-        // drugNow is the drug concentration in nanograms / ml
-        // drugNow needs to be converted to [nM]s, as IC50 is given in [nM]s
         // 1 / (1 + 1/(Math.pow(antibioticsCon / 100, 2)));
-        double drugNowInNanoMolars = NgPerMlToNanomolars(antibioticsNow);
-        double antibioticsEfficacy = 1 / ( 1 + (EC50 / StochasticDrug(drugNowInNanoMolars)));
-
+        double antibioticsEfficacy = 1 / ( 1 + (EC50 / StochasticDrug(antibioticsNow)));
         return antibioticsEfficacy;
 
     }
@@ -237,13 +120,9 @@ class AntibioticsDrug {
 
     }
 
-    double NgPerMlToNanomolars(double drugNow){
-        return drugNow * Math.pow(10,3) / molarMassDrug;
-    }
-
 }
 
-class NewExperiment extends AgentGrid2D<CartilageCells>{
+class NewExperiment{
 
     public int x = 100;
     public int y = 100;
@@ -253,26 +132,20 @@ class NewExperiment extends AgentGrid2D<CartilageCells>{
     public int numberOfTicks;
     public PDEGrid2D bacterialCon;
     public NeutrophilLayer neutrophilLayer;
+    public CartilageLayer cartilageLayer;
     //public PDEGrid2D immuneResponseLevel; // similar to T-cell concentrations, but more generic
     public double antibioticsCon = 0;
     public double antibioticsConStomach = 0;
     public double corticosteroidCon = 0;
     public double corticosteroidConStomach = 0;
     public Rand rn;
-    public double[] cellularBacterialCon = new double[length];
-    public double[] cellularImmuneResponseLevel = new double[length];
-
-    public double fixedDamageRate;
+    public double[] cellularBacterialCon = new double[x*y];
 
     public double stapyloReproductionRate = Math.pow(10,-4);
-    public double damageRate = Math.pow(10,-6);
-    public double deathProb = 7.02 * Math.pow(10,-4); // P_D
     public double staphyloDiffCoeff; // D_V [sigma^2 / min]
 
     AntibioticsDrug antibiotics;
     CorticosteroidDrug corticosteroid;
-
-    String tabletsOrIntravenous = "tablets";
 
     public double immuneResponseDecay = 0.00005;
     public double immuneResponseDiffCoeff = 0.1;
@@ -285,9 +158,8 @@ class NewExperiment extends AgentGrid2D<CartilageCells>{
     public FileIO concentrationsFile;
     public String outputDir;
 
-    public NewExperiment(int xDim, int yDim, int visScale, Rand rn, boolean isAntibiotics, boolean isCorticosteroid, int numberOfTicksDelay, double staphyloDiffCoeff, String tabletsOrIntravenous, double fixedDamageRate){
+    public NewExperiment(int xDim, int yDim, int visScale, Rand rn, boolean isAntibiotics, boolean isCorticosteroid, int numberOfTicksDelay, double staphyloDiffCoeff){
 
-        super(xDim, yDim, CartilageCells.class);
         this.x = xDim;
         this.y = yDim;
         this.visScale = visScale;
@@ -295,29 +167,18 @@ class NewExperiment extends AgentGrid2D<CartilageCells>{
         this.staphyloDiffCoeff = staphyloDiffCoeff;
         this.rn = rn;
 
-        this.tabletsOrIntravenous = tabletsOrIntravenous;
         this.isAntibiotics = isAntibiotics;
         this.isCorticosteroid = isCorticosteroid;
 
-        this.fixedDamageRate = fixedDamageRate;
-
-        if (tabletsOrIntravenous.equals("tablets")) {
-
-            this.antibiotics = new AntibioticsDrug();
-            this.corticosteroid = new CorticosteroidDrug();
-            this.numberOfTicksDrug = 2 * 24 * 60; // we administer antibiotics for 5 days, i.e. 5*24*60 minutes
-
-        } else {
-
-            this.antibiotics = new AntibioticsDrug(5.0, isAntibiotics);
-            this.corticosteroid = new CorticosteroidDrug(5.0, isCorticosteroid);
-            this.numberOfTicksDrug = 4 * 24 * 60; // 4 days
-
-        }
+        this.antibiotics = new AntibioticsDrug();
+        this.corticosteroid = new CorticosteroidDrug();
+        this.numberOfTicksDrug = 14 * 24 * 60; // we administer antibiotics for 14 days, i.e. 14*24*60 minutes
 
         bacterialCon = new PDEGrid2D(xDim, yDim);
         bacterialCon.Update();
+
         neutrophilLayer = new NeutrophilLayer(xDim, yDim);
+        cartilageLayer = new CartilageLayer(xDim, yDim);
 
         outputDir = this.OutputDirectory();
         outFile = new FileIO(outputDir.concat("/").concat("Out").concat(".csv"), "w");
@@ -329,17 +190,18 @@ class NewExperiment extends AgentGrid2D<CartilageCells>{
     public void Init(){
 
         WriteHeader();
+        cartilageLayer.Init();
+        InfectionInit();
+    }
 
-        int initialPlace = length / 2;
+    public void InfectionInit(){
 
-        for (int i = 0; i < length; i++){
-            CartilageCells c = NewAgentSQ(i);
-            c.CellInit(true,false, false);
-            if ((i == initialPlace) || (i == (initialPlace-1))){
-                bacterialCon.Add(c.Isq(), 20.0);
-                bacterialCon.Update();
-            }
-        }
+        int initialPlace = this.cartilageLayer.length / 2;
+
+        bacterialCon.Add(initialPlace, 20.0);
+        bacterialCon.Add(initialPlace-1, 20.0);
+        bacterialCon.Update();
+
     }
 
     public double RunExperiment(GridWindow win, OpenGL2DWindow neutrophilWindow){
@@ -354,18 +216,12 @@ class NewExperiment extends AgentGrid2D<CartilageCells>{
             }
             neutrophilWindow.TickPause(20);
 
-            if ((numberOfTicksDelay == CorticosteroidsAntibiotics.BIG_VALUE) && (fixedDamageRate <= 100) && (((cellCounts[1] + cellCounts[2]) / 40000) * 100 >= fixedDamageRate)){
-                this.numberOfTicksDelay = tick - 1;
-                this.numberOfTicks = this.numberOfTicksDelay + this.numberOfTicksDrug;
-                System.out.println("Diffusion coeff.: " + this.staphyloDiffCoeff + ". Damage info: " + fixedDamageRate + " percent damage was found at tick " + numberOfTicksDelay + ".");
-            }
-
             TimeStep(tick);
             DrawModel(win);
             neutrophilLayer.DrawModel(neutrophilWindow);
 
-            if( tick > 0 && ( (tick % (24*60)) == 0 ))
-                win.ToPNG(outputDir + "day" + Integer.toString(tick/(24*60)) + ".jpg");
+            if( tick > 0 && ( (tick % (1*60)) == 0 ))
+                win.ToPNG(outputDir + "hour" + Integer.toString(tick/(1*60)) + ".jpg");
 
             double totalBacterialCon = TotalBacterialCon();
             double totalImmuneResponseLevel = neutrophilLayer.Pop();
@@ -387,7 +243,7 @@ class NewExperiment extends AgentGrid2D<CartilageCells>{
 
         double healthyCells = 0, damagedCells = 0, deadCells = 0;
         double[] cellCount = new double[3];
-        for (CartilageCells cell: this){
+        for (CartilageCell cell: cartilageLayer){
             if (cell.CellType == 0){
                 healthyCells += 1;
             }
@@ -438,7 +294,7 @@ class NewExperiment extends AgentGrid2D<CartilageCells>{
     void TimeStepStaphylo(int tick){
 
         // bacterial reproduction
-        for (CartilageCells cell : this){
+        for (CartilageCell cell : cartilageLayer){
             bacterialCon.Add(cell.Isq(), stapyloReproductionRate * bacterialCon.Get(cell.Isq()));
         }
 
@@ -446,7 +302,7 @@ class NewExperiment extends AgentGrid2D<CartilageCells>{
         bacterialCon.Update();
 
         // removal of bacteria
-        for (CartilageCells cell : this){
+        for (CartilageCell cell : cartilageLayer){
             // double removalEfficacy = 2/(1+Math.exp(100*drugNow));
             // double removalEfficacy = 100*Math.pow(drugNow, 2)/(1+100*Math.pow(drugNow,2));
             double drugBacterialRemovalEff = 0.01 * antibiotics.AntibioticsEfficacy(antibioticsCon);
@@ -461,43 +317,32 @@ class NewExperiment extends AgentGrid2D<CartilageCells>{
 
     void TimeStepDrug(int tick){
 
-        if (this.tabletsOrIntravenous.equals("intravenous")){
+        // decay of the drug
+        this.antibioticsCon -= this.antibiotics.drugDecay * this.antibioticsCon;
+        this.corticosteroidCon -= this.corticosteroid.drugDecay * this.corticosteroidCon;
 
-            this.antibioticsCon = this.antibiotics.intravenousAntibioticsCon;
-            this.corticosteroidCon = this.corticosteroid.intravenousCorticosteroidCon;
+        // decay of the drug in the stomach
+        // and appearance of the drug at the lung epithelial cells
+        double transferQuantity = this.antibiotics.drugDecayStomach * this.antibioticsConStomach;
+        this.antibioticsCon += transferQuantity;
+        this.antibioticsConStomach -= transferQuantity;
 
-        } else if (this.tabletsOrIntravenous.equals("tablets")){
+        transferQuantity = this.corticosteroid.drugDecayStomach * this.corticosteroidConStomach;
+        this.corticosteroidCon += transferQuantity;
+        this.corticosteroidConStomach -= transferQuantity;
 
-            // decay of the drug
-            this.antibioticsCon -= this.antibiotics.drugDecay * this.antibioticsCon;
-            this.corticosteroidCon -= this.corticosteroid.drugDecay * this.corticosteroidCon;
-
-            // decay of the drug in the stomach
-            // and appearance of the drug at the lung epithelial cells
-            double transferQuantity = this.antibiotics.drugDecayStomach * this.antibioticsConStomach;
-            this.antibioticsCon += transferQuantity;
-            this.antibioticsConStomach -= transferQuantity;
-
-            transferQuantity = this.corticosteroid.drugDecayStomach * this.corticosteroidConStomach;
-            this.corticosteroidCon += transferQuantity;
-            this.corticosteroidConStomach -= transferQuantity;
-
-            // drug appearance in the stomach
-            this.antibioticsConStomach += AntibioticsSourceStomach(tick);
-            this.corticosteroidConStomach += CorticosteroidSourceStomach(tick);
-
-        } else {
-            System.out.println("Intravenous and tablets are the only two choices currently.");
-        }
+        // drug appearance in the stomach
+        this.antibioticsConStomach += AntibioticsSourceStomach(tick);
+        this.corticosteroidConStomach += CorticosteroidSourceStomach(tick);
 
     }
 
     void TimeStepCartilageCells(int tick){
 
-        for (CartilageCells cell : this){
-            cell.CellDamage();
+        for (CartilageCell cell : cartilageLayer){
+            cell.CellDamage(neutrophilLayer);
         }
-        for (CartilageCells cell : this) {
+        for (CartilageCell cell : cartilageLayer) {
             cell.CellDeath();
         }
 
@@ -515,7 +360,7 @@ class NewExperiment extends AgentGrid2D<CartilageCells>{
     double TotalBacterialCon() {
 
         double totalBacterialCon = 0;
-        for (int i = 0; i < length; i++){
+        for (int i = 0; i < cartilageLayer.length; i++){
             cellularBacterialCon[i] = bacterialCon.Get(i);
         }
         for (double bacterialConInCell : cellularBacterialCon ){
@@ -573,18 +418,12 @@ class NewExperiment extends AgentGrid2D<CartilageCells>{
         double drugInfo;
         if (this.isAntibiotics == false){
             drugInfo = 0.0;
-        } else if (this.tabletsOrIntravenous.equals("intravenous")) {
-            drugInfo = this.antibiotics.NgPerMlToNanomolars(this.antibiotics.intravenousAntibioticsCon);
         } else {
             drugInfo = this.antibiotics.drugSourceStomach;
         }
 
-        String outputDir = projPath + "/" + date_time + this.tabletsOrIntravenous + drugInfo + "__diff" + this.staphyloDiffCoeff;
-        if(this.fixedDamageRate < 100.0){
-            outputDir +=  "__damagerate" + this.fixedDamageRate + "/";
-        } else {
-            outputDir +=  "__delaytime" + this.numberOfTicksDelay + "/";
-        }
+        String outputDir = projPath + "/" + date_time + drugInfo + "__diff" + this.staphyloDiffCoeff;
+        outputDir +=  "__delaytime" + this.numberOfTicksDelay + "/";
 
         new File(outputDir).mkdirs();
 
@@ -594,8 +433,8 @@ class NewExperiment extends AgentGrid2D<CartilageCells>{
 
     void DrawModel(GridWindow vis){
 
-        for (int i = 0; i < length; i++) {
-            CartilageCells drawMe = GetAgent(i);
+        for (int i = 0; i < cartilageLayer.length; i++) {
+            CartilageCell drawMe = cartilageLayer.GetAgent(i);
 
             if (drawMe == null){
                 vis.SetPix(i, RGB256(255, 255, 255));
@@ -615,16 +454,36 @@ class NewExperiment extends AgentGrid2D<CartilageCells>{
                 }
             }
 
-            vis.SetPix(ItoX(i) + xDim, ItoY(i), HeatMapGRB(100*bacterialCon.Get(i)));
+            vis.SetPix(cartilageLayer.ItoX(i) + x, cartilageLayer.ItoY(i), HeatMapGRB(100*bacterialCon.Get(i)));
 
-            vis.SetPix(ItoX(i) + 2 * xDim, ItoY(i), HeatMapBGR(0.1*neutrophilLayer.PopAt(i)));
+            vis.SetPix(cartilageLayer.ItoX(i) + 2 * x, cartilageLayer.ItoY(i), HeatMapBGR(0.1*neutrophilLayer.PopAt(i)));
         }
     }
 
 }
 
-class CartilageCells extends AgentSQ2Dunstackable<NewExperiment>{
+class CartilageLayer extends AgentGrid2D<CartilageCell>{
+
+    public CartilageLayer(int xDim, int yDim){
+        super(xDim, yDim, CartilageCell.class);
+    }
+
+    public void Init(){
+
+        for (int i = 0; i < this.length; i++){
+            CartilageCell cartilageCell = NewAgentSQ(i);
+            cartilageCell.CellInit(true,false, false);
+        }
+
+    }
+
+}
+
+class CartilageCell extends AgentSQ2Dunstackable<CartilageLayer>{
     int CellType;
+    Rand rn = new Rand();
+    double damageRate = Math.pow(10,-3);
+    double deathProb = Math.pow(10,-4);
 
     public void CellInit(boolean isHealthy, boolean isDamaged,
                          boolean isDead){
@@ -640,18 +499,18 @@ class CartilageCells extends AgentSQ2Dunstackable<NewExperiment>{
         }
     }
 
-    public void CellDamage(){
+    public void CellDamage(NeutrophilLayer neutrophilLayer){
 
         // nor antibiotics nor corticosteroids help the cells directly
         // difference w.r.t. certain antivirals, which prevent the cells from getting infected
 
         // chondral damage: depends on the immune response strength (a strong immune response kills bacteria, but damages the cartilage as well)
 
-        double immuneConAtCell = G.neutrophilLayer.PopAt(Isq());
-        double effectiveDamageProb = immuneConAtCell * G.damageRate * G.xDim * G.yDim;
+        double immuneConAtCell = neutrophilLayer.PopAt(Isq());
+        double effectiveDamageProb = immuneConAtCell * damageRate;
 
         if (this.CellType == 0){ // healthy cell
-            if (G.rn.Double() < effectiveDamageProb) {
+            if (rn.Double() < effectiveDamageProb) { //rn.Double() returns a value from 0 to 1
                 this.CellType = 1;
             }
         }
@@ -660,7 +519,7 @@ class CartilageCells extends AgentSQ2Dunstackable<NewExperiment>{
     public void CellDeath(){
 
         if (this.CellType == 1) { // damaged
-            if(G.rn.Double() < G.deathProb){
+            if(rn.Double() < deathProb){
                 this.CellType = 2;
             }
         }
@@ -674,20 +533,20 @@ class Neutrophil extends AgentPT2D<NeutrophilLayer> {
     public void Init() {this.color = RGB256(random.Int(255),random.Int(255),random.Int(255));}
 
     public void NeutrophilDecay(double decayProb){
-        if(G.rng.Double()<decayProb){
+        if(G.rn.Double()<decayProb){
             Dispose();
         }
     }
 
     public void NeutrophilsCallNeutrophils(double signalSuccess){
-        if((G.PopAt(Isq())<5) && G.rng.Double()<signalSuccess){
+        if((G.PopAt(Isq())<5) && G.rn.Double()<signalSuccess){
             double[] location = G.NeutrophilInfiltrationLocation();
             G.NewAgentPT(location[0], location[1]).Init();
         }
     }
 
     public void NeutrophilMove(){
-        G.rng.RandomPointInCircle(1.5,G.moveCoords);
+        G.rn.RandomPointInCircle(1.5,G.moveCoords);
         MoveSafePT(Xpt()+G.moveCoords[0], Ypt()+G.moveCoords[1]);
     }
 
@@ -698,7 +557,7 @@ class NeutrophilLayer extends AgentGrid2D<Neutrophil> {
     double signalingIntensity = 0.5;
     double signalSuccess = 0.7;
 
-    Rand rng = new Rand();
+    Rand rn = new Rand();
     double[] moveCoords = new double[2];
 
     public NeutrophilLayer(int x, int y) {super(x, y, Neutrophil.class);}
