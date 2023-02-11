@@ -61,8 +61,8 @@ class CorticosteroidDrug{
     double EC50 = 62; // the drug quantity which results in 50% efficacy
 
     double drugDecay = 0.010;
-    double drugSourceStomach = 400;
-    double drugDecayStomach = 0.020;
+    double drugSourceCompartment1 = 400;
+    double drugDecayCompartment1 = 0.020;
 
     public CorticosteroidDrug(){
 
@@ -94,8 +94,8 @@ class AntibioticsDrug {
     double EC50 = 62; // in nM = nanoMolars, [nM] = 10^-9 [mol/L]; https://www.fda.gov/media/155050/download
 
     double drugDecay = 0.005;
-    double drugSourceStomach = 100;
-    double drugDecayStomach = 0.010;
+    double drugSourceCompartment1 = 100;
+    double drugDecayCompartment1 = 0.010;
     public AntibioticsDrug(){
 
     }
@@ -136,9 +136,9 @@ class NewExperiment{
     public CartilageLayer cartilageLayer;
     //public PDEGrid2D immuneResponseLevel; // similar to T-cell concentrations, but more generic
     public double antibioticsCon = 0;
-    public double antibioticsConStomach = 0;
+    public double antibioticsConCompartment1 = 0;
     public double corticosteroidCon = 0;
-    public double corticosteroidConStomach = 0;
+    public double corticosteroidConCompartment1 = 0;
     public Rand rn;
     public double[] cellularBacterialCon = new double[x*y];
     public double[] cellularAntibioticsCon = new double[x*y];
@@ -324,31 +324,43 @@ class NewExperiment{
 
     void TimeStepDrug(int tick){
 
-        double antibioticsConPrev = this.antibioticsCon;
+        // STEP 1: CALCULATE SERUM CONCENTRATION LEVELS
 
         // decay of the drug
         this.antibioticsCon -= this.antibiotics.drugDecay * this.antibioticsCon;
         this.corticosteroidCon -= this.corticosteroid.drugDecay * this.corticosteroidCon;
 
-        // decay of the drug in the stomach
-        // and appearance of the drug at the lung epithelial cells
-        double transferQuantity = this.antibiotics.drugDecayStomach * this.antibioticsConStomach;
+        // decay of the drug in the first compartment (stomach or place of injection)
+        // and appearance of the drug in the blood everywhere, including veins near the joint
+        double transferQuantity = this.antibiotics.drugDecayCompartment1 * this.antibioticsConCompartment1;
         this.antibioticsCon += transferQuantity;
-        this.antibioticsConStomach -= transferQuantity;
+        this.antibioticsConCompartment1 -= transferQuantity;
 
-        transferQuantity = this.corticosteroid.drugDecayStomach * this.corticosteroidConStomach;
+        transferQuantity = this.corticosteroid.drugDecayCompartment1 * this.corticosteroidConCompartment1;
         this.corticosteroidCon += transferQuantity;
-        this.corticosteroidConStomach -= transferQuantity;
+        this.corticosteroidConCompartment1 -= transferQuantity;
 
-        // drug appearance in the stomach
-        this.antibioticsConStomach += AntibioticsSourceStomach(tick);
-        this.corticosteroidConStomach += CorticosteroidSourceStomach(tick);
+        // drug appearance in Compartment1
+        this.antibioticsConCompartment1 += AntibioticsSourceCompartment1(tick);
+        this.corticosteroidConCompartment1 += CorticosteroidSourceCompartment1(tick);
 
-        double antibioticsConNext = this.antibioticsCon;
+        // STEP 2: CALCULATE CONCENTRATION LEVELS WITHIN THE JOINT
+
+        // dynamics at the border
         for (int i = 0; i < cartilageLayer.border.length; i++){
-            antibioticsLayer.Add(cartilageLayer.border[i], (antibioticsConNext-antibioticsConPrev)/(2*x + 2*y));
+            // whatever serum concentration levels we have outide,
+            // we assume we have that exact concentration level at the border cells
+            antibioticsLayer.Set(cartilageLayer.border[i], this.antibioticsCon);
         }
 
+        //decay
+
+        for (CartilageCell cell : cartilageLayer){
+            antibioticsLayer.Add(cell.Isq(), -this.antibiotics.drugDecay * antibioticsLayer.Get(cell.Isq()));
+        }
+        antibioticsLayer.Update();
+
+        // diffusion
         antibioticsLayer.DiffusionADI(antibioticsDiffCoeff);
         antibioticsLayer.Update();
 
@@ -386,19 +398,19 @@ class NewExperiment{
         return totalBacterialCon;
     }
 
-    double AntibioticsSourceStomach(int tick){
+    double AntibioticsSourceCompartment1(int tick){
 
         if ((tick > numberOfTicksDelay) && (isAntibiotics == true) && (((tick - numberOfTicksDelay) % (12 * 60)) == 1)) {
-            return this.antibiotics.drugSourceStomach;
+            return this.antibiotics.drugSourceCompartment1;
         } else {
             return 0.0;
         }
     }
 
-    double CorticosteroidSourceStomach(int tick){
+    double CorticosteroidSourceCompartment1(int tick){
 
         if ((tick > numberOfTicksDelay) && (isCorticosteroid == true) && (((tick - numberOfTicksDelay) % (12 * 60)) == 1)) {
-            return this.corticosteroid.drugSourceStomach;
+            return this.corticosteroid.drugSourceCompartment1;
         } else {
             return 0.0;
         }
@@ -436,7 +448,7 @@ class NewExperiment{
         if (this.isAntibiotics == false){
             drugInfo = 0.0;
         } else {
-            drugInfo = this.antibiotics.drugSourceStomach;
+            drugInfo = this.antibiotics.drugSourceCompartment1;
         }
 
         String outputDir = projPath + "/" + date_time + drugInfo + "__diff" + this.staphyloDiffCoeff;
@@ -475,7 +487,7 @@ class NewExperiment{
 
             vis.SetPix(cartilageLayer.ItoX(i) + 2 * x, cartilageLayer.ItoY(i), HeatMapBGR(0.1*neutrophilLayer.PopAt(i)));
 
-            vis.SetPix(cartilageLayer.ItoX(i) + 3 * x, cartilageLayer.ItoY(i), HeatMapGRB(200*antibioticsLayer.Get(i)));
+            vis.SetPix(cartilageLayer.ItoX(i) + 3 * x, cartilageLayer.ItoY(i), HeatMapGRB(0.1*antibioticsLayer.Get(i)));
         }
     }
 
