@@ -202,6 +202,7 @@ class NewExperiment{
 
             if( tick > 0 && ( (tick % (1*60)) == 0 ))
                 win.ToPNG(outputDir + "hour" + Integer.toString(tick/(1*60)) + ".jpg");
+                neutrophilWindow.ToPNG(outputDir + "hour" + Integer.toString(tick/(1*60)) + "neutrophils.jpg");
 
             double totalBacterialCon = TotalBacterialCon();
             System.out.println("TBC: " + totalBacterialCon);
@@ -225,13 +226,13 @@ class NewExperiment{
         double healthyCells = 0, damagedCells = 0, deadCells = 0;
         double[] cellCount = new double[3];
         for (CartilageCell cell: cartilageLayer){
-            if (cell.CellType == 0){
+            if (cell.cellType == 0){
                 healthyCells += 1;
             }
-            else if (cell.CellType == 1 ){
+            else if (cell.cellType == 1 ){
                 damagedCells += 1;
             }
-            else if (cell.CellType == 2){
+            else if (cell.cellType == 2){
                 deadCells += 1;
             }
         }
@@ -451,16 +452,16 @@ class NewExperiment{
                 vis.SetPix(i, RGB256(255, 255, 255));
             }
             else{
-                if (drawMe.CellType == 0){		// Healthy cells
+                if (drawMe.cellType == 0){		// Healthy cells
                     vis.SetPix(i, RGB256(119, 198, 110));
                 }
-                else if (drawMe.CellType == 1){   // Damaged cells
+                else if (drawMe.cellType == 1){   // Damaged cells
                     vis.SetPix(i, RGB256(124, 65, 120));
                 }
-                else if (drawMe.CellType == 2){
+                else if (drawMe.cellType == 2){
                     vis.SetPix(i, RGB(0, 0, 0));
                 }
-                else if (drawMe.CellType == 3){
+                else if (drawMe.cellType == 3){
                     vis.SetPix(i, RGB(255, 255, 255));
                 }
             }
@@ -501,7 +502,7 @@ class CartilageLayer extends AgentGrid2D<CartilageCell>{
 }
 
 class CartilageCell extends AgentSQ2Dunstackable<CartilageLayer>{
-    int CellType;
+    int cellType;
     Rand rn = new Rand();
     double damageRate = Math.pow(10,-3);
     double deathProb = Math.pow(10,-4);
@@ -510,13 +511,13 @@ class CartilageCell extends AgentSQ2Dunstackable<CartilageLayer>{
                          boolean isDead){
 
         if(isHealthy == true){
-            this.CellType = 0;
+            this.cellType = 0;
         }
         else if(isDamaged == true){
-            this.CellType = 1;
+            this.cellType = 1;
         }
         else if(isDead == true) {
-            this.CellType = 2;
+            this.cellType = 2;
         }
     }
 
@@ -530,18 +531,18 @@ class CartilageCell extends AgentSQ2Dunstackable<CartilageLayer>{
         double immuneConAtCell = neutrophilLayer.PopAt(Isq());
         double effectiveDamageProb = immuneConAtCell * damageRate;
 
-        if (this.CellType == 0){ // healthy cell
+        if (this.cellType == 0){ // healthy cell
             if (rn.Double() < effectiveDamageProb) { //rn.Double() returns a value from 0 to 1
-                this.CellType = 1;
+                this.cellType = 1;
             }
         }
     }
 
     public void CellDeath(){
 
-        if (this.CellType == 1) { // damaged
+        if (this.cellType == 1) { // damaged
             if(rn.Double() < deathProb){
-                this.CellType = 2;
+                this.cellType = 2;
             }
         }
     }
@@ -560,7 +561,7 @@ class Neutrophil extends AgentPT2D<NeutrophilLayer> {
     }
 
     public void NeutrophilsCallNeutrophils(double signalSuccess){
-        if((G.PopAt(Isq())<3) && G.rn.Double()<signalSuccess){
+        if((G.PopAt(Isq())<1) && G.rn.Double()<signalSuccess){
             double[] location = G.NeutrophilInfiltrationLocation();
             G.NewAgentPT(location[0], location[1]).Init();
         }
