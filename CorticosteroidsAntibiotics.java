@@ -55,7 +55,9 @@ public class CorticosteroidsAntibiotics{
 
 }
 
-class CorticosteroidDrug{
+class Drug{
+
+    String drugType = "";
 
     // general properties
     double EC50 = 20; // the drug quantity which results in 50% efficacy
@@ -64,47 +66,20 @@ class CorticosteroidDrug{
     double drugSourceCompartment1 = 200;
     double drugDecayCompartment1 = 0.010;
 
-    public CorticosteroidDrug(){
+    public Drug(String drugType, double drugDecay, double drugSourceCompartment1, double drugDecayCompartment1, double EC50){
+
+        this.drugType = drugType;
+        this.drugDecay = drugDecay;
+        this.drugSourceCompartment1 = drugSourceCompartment1;
+        this.drugDecayCompartment1 = drugDecayCompartment1;
+        this.EC50 = EC50;
 
     }
 
-    public double CorticosteroidEfficacy(double steroidNow){
+    public double DrugEfficacy(double drugNow){
 
-        double steroidEfficacy = 1 / ( 1 + (EC50 / StochasticDrug(steroidNow)));
-        return steroidEfficacy;
-
-    }
-
-    double StochasticDrug(double drug){
-
-        double stdDevOfGaussian = drug / 100;
-
-        Rand random = new Rand();
-        double stochasticDrug = random.Gaussian(drug, stdDevOfGaussian);
-        stochasticDrug = stochasticDrug > 0.0 ? stochasticDrug : 0.0;
-
-        return stochasticDrug;
-
-    }
-
-}
-
-class AntibioticsDrug {
-
-    double EC50 = 20; // in nM = nanoMolars, [nM] = 10^-9 [mol/L]; https://www.fda.gov/media/155050/download
-
-    double drugDecay = 0.025;
-    double drugSourceCompartment1 = 200;
-    double drugDecayCompartment1 = 0.010;
-    public AntibioticsDrug(){
-
-    }
-
-    double AntibioticsEfficacy(double antibioticsNow){
-
-        // 1 / (1 + 1/(Math.pow(antibioticsCon / 100, 2)));
-        double antibioticsEfficacy = 1 / ( 1 + (EC50 / StochasticDrug(antibioticsNow)));
-        return antibioticsEfficacy;
+        double drugEfficacy = 1 / ( 1 + (EC50 / StochasticDrug(drugNow)));
+        return drugEfficacy;
 
     }
 
@@ -146,8 +121,8 @@ class NewExperiment{
     public double staphyloDiffCoeff; // D_V [sigma^2 / min]
     public double antibioticsDiffCoeff = 20;
 
-    AntibioticsDrug antibiotics;
-    CorticosteroidDrug corticosteroid;
+    Drug antibiotics;
+    Drug corticosteroid;
 
     public double immuneResponseDecay = 0.00005;
 
@@ -172,8 +147,8 @@ class NewExperiment{
         this.isAntibiotics = isAntibiotics;
         this.isCorticosteroid = isCorticosteroid;
 
-        this.antibiotics = new AntibioticsDrug();
-        this.corticosteroid = new CorticosteroidDrug();
+        this.antibiotics = new Drug("antibiotics", 0.025, 200, 0.010,20);
+        this.corticosteroid = new Drug("corticosteroid", 0.010, 200, 0.010,20);
         this.numberOfTicksDrug = 14 * 24 * 60; // we administer antibiotics for 14 days, i.e. 14*24*60 minutes
 
         bacterialCon = new PDEGrid2D(xDim, yDim);
@@ -271,13 +246,13 @@ class NewExperiment{
     void TimeStepNeutrophils(){
 
         // decay of the immuneResponseLevel
-        double decayFactor = immuneResponseDecay + 0.25 * corticosteroid.CorticosteroidEfficacy(corticosteroidCon);
+        double decayFactor = immuneResponseDecay + 0.25 * corticosteroid.DrugEfficacy(corticosteroidCon);
         for(Neutrophil cell: neutrophilLayer){
             cell.NeutrophilDecay(decayFactor);
         }
 
         // neutrophils arrive when bacterial concentration is high or when other neutrophils call them
-        double corticosteroidSuppression = (1 - corticosteroid.CorticosteroidEfficacy(corticosteroidCon));
+        double corticosteroidSuppression = (1 - corticosteroid.DrugEfficacy(corticosteroidCon));
         double bacterialFactor = 0.1 / (1 + 1/(Math.pow(TotalBacterialCon(),2)));
         double arrivalFactor = bacterialFactor * corticosteroidSuppression;
 
@@ -319,7 +294,7 @@ class NewExperiment{
         for (CartilageCell cell : cartilageLayer){
             // double removalEfficacy = 2/(1+Math.exp(100*drugNow));
             // double removalEfficacy = 100*Math.pow(drugNow, 2)/(1+100*Math.pow(drugNow,2));
-            double drugBacterialRemovalEff = 0.1 * antibiotics.AntibioticsEfficacy(antibioticsLayer.Get(cell.Isq()));
+            double drugBacterialRemovalEff = 0.1 * antibiotics.DrugEfficacy(antibioticsLayer.Get(cell.Isq()));
             //System.out.println(drugBacterialRemovalEff);
             double immuneBacterialRemovalEff = 0.05 * 1 / (1 + 1/(Math.pow(neutrophilLayer.PopAt(cell.Isq()), 2)));
             bacterialCon.Add(cell.Isq(), -drugBacterialRemovalEff * bacterialCon.Get(cell.Isq()));
