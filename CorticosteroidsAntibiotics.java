@@ -41,7 +41,7 @@ public class CorticosteroidsAntibiotics{
         GridWindow win = new GridWindow("Cellular state space, bacterial concentration, immune reaction.", x*4, y, visScale,true);
         OpenGL2DWindow neutrophilWindow = new OpenGL2DWindow("Neutrophils", 500, 500, x,y);
 
-        NewExperiment experiment = new NewExperiment(x, y, visScale, new Rand(1), isAntibiotics, isCorticosteroids, 6*60, 0.6, 20);
+        NewExperiment experiment = new NewExperiment(x, y, visScale, new Rand(1), isAntibiotics, isCorticosteroids, 300, 0.6, 20);
         experiment.numberOfTicks = experiment.numberOfTicksDelay + experiment.numberOfTicksDrug;
 
         experiment.Init();
@@ -178,8 +178,8 @@ class NewExperiment{
 
         int initialPlace = this.cartilageLayer.length / 2;
 
-        bacterialCon.Add(initialPlace, 20.0);
-        bacterialCon.Add(initialPlace-1, 20.0);
+        bacterialCon.Add(initialPlace, 25.0);
+        bacterialCon.Add(initialPlace-1, 2.0);
         bacterialCon.Update();
 
     }
@@ -383,7 +383,7 @@ class NewExperiment{
 
     double AntibioticsSourceCompartment1(int tick){
 
-        if ((tick > numberOfTicksDelay) && (isAntibiotics == true) && (((tick - numberOfTicksDelay) % (12 * 60)) == 1)) {
+        if ((tick > numberOfTicksDelay) && (isAntibiotics == true) && (((tick - numberOfTicksDelay) % 700) == 1)) {
             return this.antibiotics.drugSourceCompartment1;
         } else {
             return 0.0;
@@ -392,7 +392,7 @@ class NewExperiment{
 
     double CorticosteroidSourceCompartment1(int tick){
 
-        if ((tick > numberOfTicksDelay) && (isCorticosteroid == true) && (((tick - numberOfTicksDelay) % (12 * 60)) == 1)) {
+        if ((tick > numberOfTicksDelay) && (isCorticosteroid == true) && (((tick - numberOfTicksDelay) % 700) == 1)) {
             return this.corticosteroid.drugSourceCompartment1;
         } else {
             return 0.0;
