@@ -41,7 +41,7 @@ public class CorticosteroidsAntibiotics{
         GridWindow win = new GridWindow("Cellular state space, bacterial concentration, immune reaction.", x*4, y, visScale,true);
         OpenGL2DWindow neutrophilWindow = new OpenGL2DWindow("Neutrophils", 500, 500, x,y);
 
-        NewExperiment experiment = new NewExperiment(x, y, visScale, new Rand(1), isAntibiotics, isCorticosteroids, 300, 0.6, 20);
+        NewExperiment experiment = new NewExperiment(x, y, visScale, new Rand(1), isAntibiotics, isCorticosteroids, 150, 0.6, 20);
         experiment.numberOfTicks = experiment.numberOfTicksDelay + experiment.numberOfTicksDrug;
 
         experiment.Init();
@@ -120,11 +120,13 @@ class NewExperiment{
     public double stapyloReproductionRate = Math.pow(10,-2);
     public double staphyloDiffCoeff; // D_V [sigma^2 / min]
     public double antibioticsDiffCoeff = 20;
+    public boolean staphyloExtinct = false;
+    public double extinctDeclarationThreshold = 0.05;
 
     Drug antibiotics;
     Drug corticosteroid;
 
-    public double immuneResponseDecay = 0.00005;
+    public double immuneResponseDecay = 0.0005;
 
     public boolean isAntibiotics = true;
     public boolean isCorticosteroid = true;
@@ -147,9 +149,9 @@ class NewExperiment{
         this.isAntibiotics = isAntibiotics;
         this.isCorticosteroid = isCorticosteroid;
 
-        this.antibiotics = new Drug("antibiotics", 0.025, 200, 0.010,20);
-        this.corticosteroid = new Drug("corticosteroid", 0.010, 200, 0.010,20);
-        this.numberOfTicksDrug = 14 * 24 * 60; // we administer antibiotics for 14 days, i.e. 14*24*60 minutes
+        this.antibiotics = new Drug("antibiotics", 0.025, 100, 0.010,20);
+        this.corticosteroid = new Drug("corticosteroid", 0.010, 50, 0.010,20);
+        this.numberOfTicksDrug = 5000;
 
         bacterialCon = new PDEGrid2D(xDim, yDim);
         bacterialCon.Update();
@@ -200,9 +202,10 @@ class NewExperiment{
             DrawModel(win);
             neutrophilLayer.DrawModel(neutrophilWindow);
 
-            if( tick > 0 && ( (tick % (1*60)) == 0 ))
-                win.ToPNG(outputDir + "hour" + Integer.toString(tick/(1*60)) + ".jpg");
-                neutrophilWindow.ToPNG(outputDir + "hour" + Integer.toString(tick/(1*60)) + "neutrophils.jpg");
+            if( tick > 0 && ( (tick % (1*10)) == 1 )) {
+                win.ToPNG(outputDir + tick + ".jpg");
+                neutrophilWindow.ToPNG(outputDir + tick + "neutrophils.jpg");
+            }
 
             double totalBacterialCon = TotalBacterialCon();
             System.out.println("TBC: " + totalBacterialCon);
@@ -247,14 +250,14 @@ class NewExperiment{
     void TimeStepNeutrophils(){
 
         // decay of the immuneResponseLevel
-        double decayFactor = immuneResponseDecay + 0.25 * corticosteroid.DrugEfficacy(corticosteroidCon);
+        double decayFactor = immuneResponseDecay + 0.05 * corticosteroid.DrugEfficacy(corticosteroidCon);
         for(Neutrophil cell: neutrophilLayer){
             cell.NeutrophilDecay(decayFactor);
         }
 
         // neutrophils arrive when bacterial concentration is high or when other neutrophils call them
         double corticosteroidSuppression = (1 - corticosteroid.DrugEfficacy(corticosteroidCon));
-        double bacterialFactor = 0.1 / (1 + 1/(Math.pow(TotalBacterialCon(),2)));
+        double bacterialFactor = 10 / (1 + 1/(Math.pow(TotalBacterialCon(),2)));
         double arrivalFactor = bacterialFactor * corticosteroidSuppression;
 
         neutrophilLayer.BacteriaGeneratedNeutrophilArrival(arrivalFactor);
@@ -262,8 +265,9 @@ class NewExperiment{
         // neutrophils "call" new ones by signaling, so this could be reasonable
         for(Neutrophil cell: neutrophilLayer){
             Rand rng = new Rand();
-            if(rng.Double() < neutrophilLayer.signalingIntensity) {
-                cell.NeutrophilsCallNeutrophils(neutrophilLayer.signalSuccess * arrivalFactor);
+            double randomDouble = rng.Double();
+            if(randomDouble < neutrophilLayer.signalingIntensity) {
+                cell.NeutrophilsCallNeutrophils(300*neutrophilLayer.signalSuccess * corticosteroidSuppression * bacterialCon.Get(cell.Isq()));
             }
         }
 
@@ -275,33 +279,37 @@ class NewExperiment{
 
     void TimeStepStaphylo(){
 
-        // if total bacterial concentration is extremely low, we assume the infection
-        // dies out
-        if (this.TotalBacterialCon() < 0.000001){
-            for (CartilageCell cell : cartilageLayer){
-                bacterialCon.Set(cell.Isq(), 0);
+        if(this.staphyloExtinct == false) {
+
+            // if total bacterial concentration is extremely low, we assume the infection
+            // dies out
+            if (this.TotalBacterialCon() < this.extinctDeclarationThreshold) {
+                for (CartilageCell cell : cartilageLayer) {
+                    bacterialCon.Set(cell.Isq(), 0);
+                }
+                this.staphyloExtinct = true;
             }
-        }
 
-        // bacterial reproduction
-        for (CartilageCell cell : cartilageLayer){
-            bacterialCon.Add(cell.Isq(), stapyloReproductionRate * bacterialCon.Get(cell.Isq()));
-        }
+            // bacterial reproduction
+            for (CartilageCell cell : cartilageLayer) {
+                bacterialCon.Add(cell.Isq(), stapyloReproductionRate * bacterialCon.Get(cell.Isq()));
+            }
 
-        bacterialCon.DiffusionADI(staphyloDiffCoeff);
-        bacterialCon.Update();
+            bacterialCon.DiffusionADI(staphyloDiffCoeff);
+            bacterialCon.Update();
 
-        // removal of bacteria
-        for (CartilageCell cell : cartilageLayer){
-            // double removalEfficacy = 2/(1+Math.exp(100*drugNow));
-            // double removalEfficacy = 100*Math.pow(drugNow, 2)/(1+100*Math.pow(drugNow,2));
-            double drugBacterialRemovalEff = 0.1 * antibiotics.DrugEfficacy(antibioticsLayer.Get(cell.Isq()));
-            //System.out.println(drugBacterialRemovalEff);
-            double immuneBacterialRemovalEff = 0.05 * 1 / (1 + 1/(Math.pow(neutrophilLayer.PopAt(cell.Isq()), 2)));
-            bacterialCon.Add(cell.Isq(), -drugBacterialRemovalEff * bacterialCon.Get(cell.Isq()));
-            bacterialCon.Add(cell.Isq(), -immuneBacterialRemovalEff * bacterialCon.Get(cell.Isq()));
+            // removal of bacteria
+            for (CartilageCell cell : cartilageLayer) {
+                // double removalEfficacy = 2/(1+Math.exp(100*drugNow));
+                // double removalEfficacy = 100*Math.pow(drugNow, 2)/(1+100*Math.pow(drugNow,2));
+                double drugBacterialRemovalEff = 0.1 * antibiotics.DrugEfficacy(antibioticsLayer.Get(cell.Isq()));
+                //System.out.println(drugBacterialRemovalEff);
+                double immuneBacterialRemovalEff = 0.05 * 1 / (1 + 1 / (Math.pow(neutrophilLayer.PopAt(cell.Isq()), 2)));
+                bacterialCon.Add(cell.Isq(), -drugBacterialRemovalEff * bacterialCon.Get(cell.Isq()));
+                bacterialCon.Add(cell.Isq(), -immuneBacterialRemovalEff * bacterialCon.Get(cell.Isq()));
+            }
+            bacterialCon.Update();
         }
-        bacterialCon.Update();
 
     }
 
@@ -418,7 +426,7 @@ class NewExperiment{
         java.util.Date now = new java.util.Date();
         java.text.SimpleDateFormat dateFormat = new java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss");
         String date_time = dateFormat.format(now);
-        String projPath = PWD() + "/output/StaphyloExperiments";
+        String projPath = PWD() + "/CorticoSteroidsAntibiotics/output/StaphyloExperiments";
         if (this.isAntibiotics == false){
             projPath += "/noDrug";
         } else if (this.isCorticosteroid == true){
@@ -434,8 +442,7 @@ class NewExperiment{
             drugInfo = this.antibiotics.drugSourceCompartment1;
         }
 
-        String outputDir = projPath + "/" + date_time + drugInfo + "__diff" + this.staphyloDiffCoeff;
-        outputDir +=  "__delaytime" + this.numberOfTicksDelay + "/";
+        String outputDir = projPath + "/";
 
         new File(outputDir).mkdirs();
 
@@ -561,7 +568,7 @@ class Neutrophil extends AgentPT2D<NeutrophilLayer> {
     }
 
     public void NeutrophilsCallNeutrophils(double signalSuccess){
-        if((G.PopAt(Isq())<1) && G.rn.Double()<signalSuccess){
+        if((G.PopAt(Isq())<5) && G.rn.Double()<signalSuccess){
             double[] location = G.NeutrophilInfiltrationLocation();
             G.NewAgentPT(location[0], location[1]).Init();
         }
@@ -594,9 +601,11 @@ class NeutrophilLayer extends AgentGrid2D<Neutrophil> {
 
     public void BacteriaGeneratedNeutrophilArrival(double arrivalFactor){
 
-        for (int i = 0; i < arrivalFactor; i++) {
-            double[] location = this.NeutrophilInfiltrationLocation();
-            this.NewAgentPT(location[0], location[1]).Init();
+        if(arrivalFactor > 1.0) {
+            for (int i = 0; i < arrivalFactor; i++) {
+                double[] location = this.NeutrophilInfiltrationLocation();
+                this.NewAgentPT(location[0], location[1]).Init();
+            }
         }
 
     }
